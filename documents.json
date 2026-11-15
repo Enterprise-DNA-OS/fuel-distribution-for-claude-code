@@ -1,11 +1,58 @@
 [
   {
-    "name": "example",
-    "title": "TODO(author): the first document this industry must produce",
-    "for_each": "select gen_random_uuid() as id, 'Example' as name",
+    "name": "delivery-docket",
+    "title": "Delivery docket",
+    "for_each": "select delivery_id as id, (ref || ' ' || customer) as name from v_deliveries where delivered_on > current_date - 14 order by delivered_on desc",
     "file": "name",
     "sections": [
-      { "title": "Details", "sql": "select 'replace me' as item, $1::text as record_id" }
+      {
+        "title": "Delivery",
+        "layout": "record",
+        "sql": "select d.ref as delivery, d.docket_no as docket, to_char(d.delivered_on, 'DD Month YYYY') as date, d.customer, d.site, d.tank_no as tank, p.name as product, p.un_number as un_number, case when p.dg_class is null then 'not dangerous goods' else 'Class ' || p.dg_class end as dangerous_goods_class, d.litres as litres_delivered, d.before_litres as tank_before, d.after_litres as tank_after, d.run_ref as run, d.rego as tanker, d.driver, tr.meter_ref as meter, coalesce(d.signed_by, '') as received_by from v_deliveries d join deliveries dv on dv.id = d.delivery_id join products p on p.id = dv.product_id left join runs r on r.id = dv.run_id left join trucks tr on tr.id = r.truck_id where d.delivery_id = $1"
+      },
+      {
+        "title": "Price",
+        "note": "Terminal gate price on the day plus the agreed margin, cents a litre, before GST.",
+        "sql": "select d.price_cpl as cents_a_litre_ex_gst, d.value_ex_gst as value_ex_gst, round(d.value_ex_gst * (select value::numeric from settings where key = 'gst_rate'), 2) as gst, round(d.value_ex_gst * (1 + (select value::numeric from settings where key = 'gst_rate')), 2) as total_incl_gst from v_deliveries d where d.delivery_id = $1"
+      }
+    ]
+  },
+  {
+    "name": "customer-statement",
+    "title": "Statement of account",
+    "for_each": "select customer_id as id, customer as name from v_debtors where owed_ex_gst > 0 order by customer",
+    "file": "name",
+    "sections": [
+      {
+        "title": "Account",
+        "layout": "record",
+        "sql": "select c.name as customer, c.code as account, c.contact_name as attention, to_char(current_date, 'DD Month YYYY') as statement_date, c.terms_days || ' days' as terms, d.owed_ex_gst as balance_ex_gst, round(d.owed_ex_gst * (1 + (select value::numeric from settings where key = 'gst_rate')), 2) as balance_incl_gst, d.overdue_ex_gst as overdue_ex_gst from customers c join v_debtors d on d.customer_id = c.id where c.id = $1"
+      },
+      {
+        "title": "Unpaid deliveries",
+        "sql": "select to_char(delivered_on, 'YYYY-MM-DD') as date, coalesce(invoice_no, ref) as invoice, docket_no as docket, site, product, litres, price_cpl as cents_a_litre, value_ex_gst, to_char(due_on, 'YYYY-MM-DD') as due, case when due_on < current_date then (current_date - due_on) || ' days overdue' else '' end as status from v_deliveries where customer_id = $1 and paid_on is null order by delivered_on"
+      }
+    ]
+  },
+  {
+    "name": "run-sheet",
+    "title": "Driver run sheet",
+    "for_each": "select id, (ref || ' ' || to_char(run_on, 'YYYY-MM-DD')) as name from runs where run_on >= current_date and status in ('planned', 'loaded') order by run_on",
+    "file": "name",
+    "sections": [
+      {
+        "title": "The run",
+        "layout": "record",
+        "sql": "select r.ref as run, to_char(r.run_on, 'Day DD Month YYYY') as date, tr.rego as tanker, d.name as driver, to_char(d.dg_endorsement_expires_on, 'YYYY-MM-DD') as dg_endorsement_to, tm.name as lift_at from runs r join trucks tr on tr.id = r.truck_id join drivers d on d.id = r.driver_id join terminals tm on tm.id = r.terminal_id where r.id = $1"
+      },
+      {
+        "title": "Lift at the terminal",
+        "sql": "select p.code as product, p.un_number, sum(o.planned_litres) as litres from orders o join tanks t on t.id = o.tank_id join products p on p.id = t.product_id where o.run_id = $1 and o.status = 'planned' group by p.code, p.un_number order by p.code"
+      },
+      {
+        "title": "Drops",
+        "sql": "select o.ref as order_ref, c.name as customer, s.name as site, s.address, t.tank_no as tank, p.code as product, o.planned_litres as litres, floor(t.capacity_l * t.safe_fill_pct / 100.0)::int as safe_fill, coalesce(s.access_notes, '') as access, coalesce(o.po_number, '') as po from orders o join tanks t on t.id = o.tank_id join sites s on s.id = t.site_id join customers c on c.id = s.customer_id join products p on p.id = t.product_id where o.run_id = $1 and o.status = 'planned' order by o.ref"
+      }
     ]
   }
 ]

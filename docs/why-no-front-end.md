@@ -13,12 +13,14 @@ That layer used to be the whole product, because talking to a database was hard.
 
 ## What you give up
 
-- **A visual board.** Stages are a table you ask about, not cards you drag.
-- **A phone app.** It runs where Claude Code runs.
+- **A driver app in the cab.** PDI sells in-truck apps that capture the meter ticket and signature at the tank. Here the driver's docket and meter ticket are entered after the drop (or the office types them from a photo). Enterprise DNA builds a simple phone form onto the same database when a fleet wants one.
+- **Live truck tracking.** There is no map of where the tankers are right now. The run sheet says where they are going, in order.
+- **Automatic sensor feeds.** Level sensors are supported (a dip with source `telemetry`), but the feed from your telemetry provider has to be connected. That is a small, specific job, and it is the kind Enterprise DNA does when it installs this.
+- **Drag and drop dispatch.** Runs are planned by asking, not by dragging orders onto a truck. The plan says why each drop is on it and why each tank was left off, which a board never did.
 - **A vendor help desk.** This is open source. Enterprise DNA supports the installed version for businesses that want someone to call.
 
 ## Who this fits
 
-Small teams who already use Claude Code, or who would rather learn to ask than learn another interface. If your team needs a screen to look at all day, keep PDI Logistics Cloud. If you need the answers more than the screens, this is cheaper, faster and yours.
+Small teams who already use Claude Code, or who would rather learn to ask than learn another interface. If your dispatchers need a live screen of every truck all day, keep PDI Logistics Cloud, or have the screen built onto this database. If you need the answers more than the screens, this is cheaper, faster and yours.
 
 Installed and run for you: https://enterprisedna.co/omni/instead-of/pdi-logistics-cloud

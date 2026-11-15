@@ -1,13 +1,46 @@
 [
   {
-    "name": "week",
-    "title": "This week",
-    "subtitle": "Fuel Distribution for Claude Code: what needs attention, rendered by npm run view",
+    "name": "dispatch-board",
+    "title": "Dispatch board",
+    "subtitle": "Fuel Distribution for Claude Code: who runs dry, what is on the trucks, what needs a decision",
     "sections": [
       {
-        "title": "Needs attention",
-        "note": "TODO(author): point this at the industry's attention view (overdue, stuck, quiet).",
-        "sql": "select 'replace me' as item, 'TODO(author)' as why"
+        "title": "Needs a decision",
+        "note": "Everything on the attention list, worst first.",
+        "sql": "select case reason when 'runout' then '1 Runs dry soon' when 'certificate_expired' then '2 Tank certificate lapsed' when 'driver_dg_expired' then '3 Driver endorsement lapsed' when 'truck_expired' then '4 Tanker certificate lapsed' when 'water' then '5 Water in the tank' when 'order_late' then '6 Order late' when 'variance' then '7 Stock lost on a run' when 'debtor' then '8 Account' when 'dip_stale' then '9 Not dipped' else '10 No price today' end as what, label as record, detail from v_attention order by 1, days"
+      },
+      {
+        "title": "Tanks at reorder within seven days",
+        "note": "Estimated level from the last dip, deliveries since and the measured daily use.",
+        "sql": "select customer, site, tank_no as tank, product, est_l as about_litres, use_per_day as litres_a_day, days_to_reorder, days_to_empty, room_l as room, case when on_order then 'on order' else '' end as ordered from v_runout where days_to_reorder <= 7 or days_to_empty is null order by days_to_empty nulls first"
+      },
+      {
+        "title": "Runs today and ahead",
+        "sql": "select r.ref as run, r.run_on as date, tr.rego as tanker, d.name as driver, tm.name as terminal, r.status, (select count(*) from orders o where o.run_id = r.id and o.status = 'planned') as drops_to_go, (select coalesce(sum(planned_litres), 0) from orders o where o.run_id = r.id and o.status = 'planned') as litres_to_go from runs r join trucks tr on tr.id = r.truck_id join drivers d on d.id = r.driver_id join terminals tm on tm.id = r.terminal_id where r.run_on >= current_date and r.status <> 'cancelled' order by r.run_on, r.ref"
+      },
+      {
+        "title": "Open orders",
+        "sql": "select o.ref as order_ref, c.name as customer, s.name as site, t.tank_no as tank, p.code as product, coalesce(o.litres_requested::text, 'fill') as litres, o.required_on as required, o.status, case when o.required_on < current_date then 'LATE' else '' end as late from orders o join tanks t on t.id = o.tank_id join sites s on s.id = t.site_id join customers c on c.id = s.customer_id join products p on p.id = t.product_id where o.status in ('open', 'planned') order by o.required_on"
+      }
+    ]
+  },
+  {
+    "name": "stock-and-money",
+    "title": "Stock and money",
+    "subtitle": "Fuel Distribution for Claude Code: what left the terminal against what reached a tank, margin, and who owes what",
+    "sections": [
+      {
+        "title": "Loaded against delivered, last 30 days, by tanker",
+        "note": "House limit: 0.5 per cent per run and product.",
+        "sql": "select rego as tanker, product, count(*) as runs, sum(loaded_l) as loaded, sum(delivered_l) as delivered, sum(variance_l) as lost, round(100.0 * sum(variance_l) / nullif(sum(loaded_l), 0), 3) as lost_pct from v_reconcile where status = 'completed' and run_on > current_date - 30 group by rego, product order by rego, product"
+      },
+      {
+        "title": "Margin by customer, last 30 days",
+        "sql": "select customer, count(*) as drops, sum(litres) as litres, round(avg(litres)) as average_drop, round(sum(margin) * 100.0 / nullif(sum(litres), 0), 2) as margin_cents_a_litre, sum(margin) as margin, round(sum(margin) / count(*), 2) as margin_per_drop from v_deliveries where delivered_on > current_date - 30 group by customer order by margin_per_drop"
+      },
+      {
+        "title": "Who owes what (ex GST)",
+        "sql": "select customer, owed_ex_gst as owed, overdue_ex_gst as overdue, over_30_ex_gst as over_30_days, oldest_overdue_days, credit_limit, case when credit_limit is not null and owed_ex_gst > credit_limit then 'OVER' else '' end as over_limit from v_debtors where owed_ex_gst > 0 order by overdue_ex_gst desc"
       }
     ]
   }
